@@ -1,4 +1,4 @@
-# Hoodwink
+# Hoodwink 🐿️
 
 Script for umbrella hack
 
