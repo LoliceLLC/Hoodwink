@@ -369,18 +369,22 @@ function Hoodwink.OnUpdate()
                 if not NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_INVULNERABLE) then
                     for _, ItemCategory in ipairs(ItemsToUse) do
                         for _, ItemName in ipairs(ItemCategory.items) do
-                            if Menu.IsSelected(Hoodwink.ImportantItemsUsage, ItemName) or Menu.IsSelected(Hoodwink.SemiImportantItemsUsage, ItemName) or Menu.IsSelected(Hoodwink.OtherItemsUsage, ItemName) or Menu.IsSelected(Hoodwink.CloseDistanceItemsUsage, ItemName) and Ability.IsCastable(NPC.GetItem(MyHero, ItemName), MyMana) then
-                                if ItemName == 'item_black_king_bar' or ItemName == 'item_veil_of_discord' or ItemName == 'item_gungir' or ItemName == 'item_heavy_blade' or ItemName == 'item_shivas_guard'
-                                or ItemName == 'item_manta' or ItemName == 'item_lotus_orb' or ItemName == 'item_blade_mail' or ItemName == 'item_mjollnir' or ItemName == 'item_satanic'
-                                or ItemName == 'item_mask_of_madness' or ItemName == 'item_boots_of_bearing' or ItemName == 'item_ancient_janggo' or ItemName == 'item_dagger_of_ristul' then
-                                    HeroesCore.ItemsUsage[ItemName](NPC.GetItem(MyHero, ItemName), EnemyTarget)
-                                elseif ItemName == 'item_fallen_sky' or ItemName == 'item_force_staff' or ItemName == 'item_hurricane_pike' or ItemName == 'item_invis_sword' or ItemName == 'item_silver_edge' then
-                                    HeroesCore.ItemsUsage[ItemName .. '_c'](NPC.GetItem(MyHero, ItemName), EnemyTarget)
-                                else
-                                    if (IsSaveToCastItems.InMirrorShield) then
+                            if Ability.IsCastable(NPC.GetItem(MyHero, ItemName), MyMana) then
+                                if Menu.IsSelected(Hoodwink.ImportantItemsUsage, ItemName) or Menu.IsSelected(Hoodwink.SemiImportantItemsUsage, ItemName) or Menu.IsSelected(Hoodwink.OtherItemsUsage, ItemName) or Menu.IsSelected(Hoodwink.CloseDistanceItemsUsage, ItemName) then
+                                    if ItemName == 'item_black_king_bar' or ItemName == 'item_veil_of_discord' or ItemName == 'item_gungir' or ItemName == 'item_heavy_blade' or ItemName == 'item_shivas_guard'
+                                    or ItemName == 'item_manta' or ItemName == 'item_lotus_orb' or ItemName == 'item_blade_mail' or ItemName == 'item_mjollnir' or ItemName == 'item_satanic'
+                                    or ItemName == 'item_mask_of_madness' or ItemName == 'item_boots_of_bearing' or ItemName == 'item_ancient_janggo' or ItemName == 'item_dagger_of_ristul' then
                                         HeroesCore.ItemsUsage[ItemName](NPC.GetItem(MyHero, ItemName), EnemyTarget)
+                                    elseif ItemName == 'item_fallen_sky' or ItemName == 'item_force_staff' or ItemName == 'item_hurricane_pike' or ItemName == 'item_invis_sword' or ItemName == 'item_silver_edge' then
+                                        HeroesCore.ItemsUsage[ItemName .. '_c'](NPC.GetItem(MyHero, ItemName), EnemyTarget)
+                                    else
+                                        if (IsSaveToCastItems.InMirrorShield) then
+                                            HeroesCore.ItemsUsage[ItemName](NPC.GetItem(MyHero, ItemName), EnemyTarget)
+                                        end
                                     end
                                 end
+                            else
+                                ComboCastStep = 1
                             end
                         end
                     end
