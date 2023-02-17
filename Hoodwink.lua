@@ -180,6 +180,7 @@ local SharpshooterDamage = nil
 -- Combo
 local EnemyTarget = nil
 local BreakerItem = nil
+local ItemsToUse = { { items = Menu.GetItems(Hoodwink.ImportantItemsUsage)}, { items = Menu.GetItems(Hoodwink.SemiImportantItemsUsage)}, { items = Menu.GetItems(Hoodwink.OtherItemsUsage)}, { items = Menu.GetItems(Hoodwink.CloseDistanceItemsUsage)} }
 local IsSaveToCastItems = { InLotus = nil, InMirrorShield = nil }
 
 -- Particle
@@ -247,41 +248,6 @@ function Hoodwink.UpdateParticle()
     end
 end
 
--- What the fuck i'm writing xd
-function Hoodwink.IsSaveToCast(Me, Target)
-    -- LotusOrb check
-    if (Menu.IsEnabled(Hoodwink.ComboInLotusEnable)) then
-        IsSaveToCastItems.InLotus = true
-    end
-    if (not Menu.IsEnabled(Hoodwink.ComboInLotusEnable)) then
-        if (not NPC.HasState(Me, Enum.ModifierState.MODIFIER_STATE_MAGIC_IMMUNE)) then
-            if (NPC.HasModifier(Target, 'modifier_item_lotus_orb_active')) then
-                IsSaveToCastItems.InLotus = false
-            else
-                IsSaveToCastItems.InLotus = true
-            end
-        else
-            IsSaveToCastItems.InLotus = true
-        end
-    end
-
-    -- MirrorShield check
-    if (Menu.IsEnabled(Hoodwink.ComboInMirrorShieldEnable)) then
-        IsSaveToCastItems.InMirrorShield = true
-    end
-    if (not Menu.IsEnabled(Hoodwink.ComboInMirrorShieldEnable)) then
-        if (not NPC.HasState(Me, Enum.ModifierState.MODIFIER_STATE_MAGIC_IMMUNE)) then
-            if (Ability.IsReady(NPC.GetItem(Target, 'item_mirror_shield'))) then
-                IsSaveToCastItems.InMirrorShield = false
-            else
-                IsSaveToCastItems.InMirrorShield = true
-            end
-        else
-            IsSaveToCastItems.InMirrorShield = true
-        end
-    end
-end
-
 function Hoodwink.OnUpdate()
 
     if (Menu.IsEnabled(Hoodwink.MainEnable)) then
@@ -301,6 +267,7 @@ function Hoodwink.OnUpdate()
         Hoodwink.UpdateInfo()
 
         -- Return end if my hero stuned etc...
+        -- TODO: rework this shit
         if not Entity.IsAlive(MyHero)
             or NPC.HasState(MyHero, Enum.ModifierState.MODIFIER_STATE_SILENCED)
             or NPC.HasState(MyHero, Enum.ModifierState.MODIFIER_STATE_MUTED)
@@ -357,6 +324,7 @@ function Hoodwink.OnUpdate()
         end
 
         -- funi Linken breaker
+        -- TODO: maybe
         BreakerItem = nil
         if (Menu.IsKeyDown(Hoodwink.ComboKey) and Menu.IsEnabled(Hoodwink.LinkenBreakerEnable) and NPC.IsLinkensProtected(EnemyTarget) or (Ability.IsReady(NPC.GetItem(EnemyTarget, 'item_mirror_shield')) and Menu.IsEnabled(Hoodwink.LinkenBreakerMirrorShieldEnable)) and (not Hoodwink.IsTargetedByProjectile(EnemyTarget))) then
             if (not NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_INVULNERABLE)) then
@@ -378,8 +346,11 @@ function Hoodwink.OnUpdate()
             -- If not is real target return end
             if (Entity.IsDormant(EnemyTarget) or not Entity.IsAlive(EnemyTarget) or NPC.IsStructure(EnemyTarget)) then return end
 
-            -- LotusOrb and MirrorShield check
-            Hoodwink.IsSaveToCast(MyHero, EnemyTarget)
+            -- LotusOrb check
+            IsSaveToCastItems.InLotus = Menu.IsEnabled(Hoodwink.ComboInLotusEnable) or NPC.HasState(MyHero, Enum.ModifierState.MODIFIER_STATE_MAGIC_IMMUNE) or (not NPC.HasModifier(EnemyTarget, 'modifier_item_lotus_orb_active'))
+
+            -- MirrorShield check
+            IsSaveToCastItems.InMirrorShield = Menu.IsEnabled(Hoodwink.ComboInMirrorShieldEnable) or NPC.HasState(MyHero, Enum.ModifierState.MODIFIER_STATE_MAGIC_IMMUNE) or (not Ability.IsReady(NPC.GetItem(EnemyTarget, 'item_mirror_shield')))
 
             -- Linken breaker check
             if (Menu.IsEnabled(Hoodwink.LinkenBreakerEnable)) then
@@ -393,64 +364,24 @@ function Hoodwink.OnUpdate()
             local ComboCastStep = 0
 
             -- Items
-            -- probably better to concatenate these tables but i'm lazy
+            -- i don't know better that or not :/
             if (ComboCastStep == 0) then
-                if (not NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_INVULNERABLE)) then
-                    for _, ImportantItems in ipairs(Menu.GetItems(Hoodwink.ImportantItemsUsage)) do
-                        if (Menu.IsSelected(Hoodwink.ImportantItemsUsage, ImportantItems)) then
-                            if (Ability.IsCastable(NPC.GetItem(MyHero, tostring(ImportantItems)), MyMana)) then
-                                if (ImportantItems == 'item_black_king_bar') then
-                                    HeroesCore.ItemsUsage[ImportantItems](NPC.GetItem(MyHero, ImportantItems), EnemyTarget)
+                if not NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_INVULNERABLE) then
+                    for _, ItemCategory in ipairs(ItemsToUse) do
+                        for _, ItemName in ipairs(ItemCategory.items) do
+                            if Menu.IsSelected(Hoodwink.ImportantItemsUsage, ItemName) or Menu.IsSelected(Hoodwink.SemiImportantItemsUsage, ItemName) or Menu.IsSelected(Hoodwink.OtherItemsUsage, ItemName) or Menu.IsSelected(Hoodwink.CloseDistanceItemsUsage, ItemName) and Ability.IsCastable(NPC.GetItem(MyHero, ItemName), MyMana) then
+                                if ItemName == 'item_black_king_bar' or ItemName == 'item_veil_of_discord' or ItemName == 'item_gungir' or ItemName == 'item_heavy_blade' or ItemName == 'item_shivas_guard'
+                                or ItemName == 'item_manta' or ItemName == 'item_lotus_orb' or ItemName == 'item_blade_mail' or ItemName == 'item_mjollnir' or ItemName == 'item_satanic'
+                                or ItemName == 'item_mask_of_madness' or ItemName == 'item_boots_of_bearing' or ItemName == 'item_ancient_janggo' or ItemName == 'item_dagger_of_ristul' then
+                                    HeroesCore.ItemsUsage[ItemName](NPC.GetItem(MyHero, ItemName), EnemyTarget)
+                                elseif ItemName == 'item_fallen_sky' or ItemName == 'item_force_staff' or ItemName == 'item_hurricane_pike' or ItemName == 'item_invis_sword' or ItemName == 'item_silver_edge' then
+                                    HeroesCore.ItemsUsage[ItemName .. '_c'](NPC.GetItem(MyHero, ItemName), EnemyTarget)
                                 else
-                                    if (IsSaveToCastItems.InLotus) then
-                                        if (IsSaveToCastItems.InMirrorShield) then
-                                            HeroesCore.ItemsUsage[ImportantItems](NPC.GetItem(MyHero, ImportantItems), EnemyTarget)
-                                        end
+                                    if (IsSaveToCastItems.InMirrorShield) then
+                                        HeroesCore.ItemsUsage[ItemName](NPC.GetItem(MyHero, ItemName), EnemyTarget)
                                     end
                                 end
                             end
-                        end
-                    end
-
-                    for _, SemiImportantItems in ipairs(Menu.GetItems(Hoodwink.SemiImportantItemsUsage)) do
-                        if (Menu.IsSelected(Hoodwink.SemiImportantItemsUsage, SemiImportantItems)) then
-                            if (Ability.IsCastable(NPC.GetItem(MyHero, tostring(SemiImportantItems)), MyMana)) then
-                                if (SemiImportantItems == 'item_veil_of_discord' or SemiImportantItems == 'item_gungir' or SemiImportantItems == 'item_heavy_blade') then
-                                    HeroesCore.ItemsUsage[SemiImportantItems](NPC.GetItem(MyHero, SemiImportantItems), EnemyTarget)
-                                else
-                                    if (IsSaveToCastItems.InLotus) then
-                                        if (IsSaveToCastItems.InMirrorShield) then
-                                            HeroesCore.ItemsUsage[SemiImportantItems](NPC.GetItem(MyHero, SemiImportantItems), EnemyTarget)
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-
-                    for _, OtherItems in ipairs(Menu.GetItems(Hoodwink.OtherItemsUsage)) do
-                        if (Menu.IsSelected(Hoodwink.OtherItemsUsage, OtherItems)) then
-                            if (Ability.IsCastable(NPC.GetItem(MyHero, tostring(OtherItems)), MyMana)) then
-                                if (OtherItems == 'item_shivas_guard' or OtherItems == 'item_manta' or OtherItems == 'item_lotus_orb' or OtherItems == 'item_blade_mail' or OtherItems == 'item_mjollnir' or OtherItems == 'item_satanic' or OtherItems == 'item_mask_of_madness' or OtherItems == 'item_boots_of_bearing' or OtherItems == 'item_ancient_janggo' or OtherItems == 'item_dagger_of_ristul') then
-                                    HeroesCore.ItemsUsage[OtherItems](NPC.GetItem(MyHero, OtherItems), EnemyTarget)
-                                else
-                                    if (IsSaveToCastItems.InLotus) then
-                                        if (IsSaveToCastItems.InMirrorShield) then
-                                            HeroesCore.ItemsUsage[OtherItems](NPC.GetItem(MyHero, OtherItems), EnemyTarget)
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-
-                    for _, CloseDistanceItems in ipairs(Menu.GetItems(Hoodwink.CloseDistanceItemsUsage)) do
-                        if (Menu.IsSelected(Hoodwink.CloseDistanceItemsUsage, CloseDistanceItems)) then
-                            if (Ability.IsCastable(NPC.GetItem(MyHero, tostring(CloseDistanceItems)), MyMana)) then
-                                HeroesCore.ItemsUsage[CloseDistanceItems .. '_c'](NPC.GetItem(MyHero, CloseDistanceItems), EnemyTarget)
-                            end
-                        else
-                            ComboCastStep = 1
                         end
                     end
                 end
@@ -470,16 +401,13 @@ function Hoodwink.OnUpdate()
             -- HuntersBoomerang
             if (ComboCastStep == 2) then
                 if (Ability.IsCastable(HuntersBoomerang, MyMana) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'hunters_boomerang')) then
-                    for _, RightHero in pairs(Entity.GetHeroesInRadius(MyHero, HuntersBoomerangRadius, Enum.TeamType.TEAM_ENEMY)) do
-                        if (RightHero == EnemyTarget) then
-                            if (IsSaveToCastItems.InLotus) then
-                                if (IsSaveToCastItems.InMirrorShield) then
-                                    Ability.CastTarget(HuntersBoomerang, EnemyTarget)
-                                else
-                                    ComboCastStep = 3
-                                end
-                            else
+                    local InRangeEnemies = Entity.GetHeroesInRadius(MyHero, HuntersBoomerangRadius, Enum.TeamType.TEAM_ENEMY)
+                    for _, Enemy in ipairs(InRangeEnemies) do
+                        if (Enemy == EnemyTarget) then
+                            if (not IsSaveToCastItems.InLotus or not IsSaveToCastItems.InMirrorShield) then
                                 ComboCastStep = 3
+                            else
+                                Ability.CastTarget(HuntersBoomerang, EnemyTarget)
                             end
                         else
                             ComboCastStep = 3
@@ -502,22 +430,16 @@ function Hoodwink.OnUpdate()
             -- AcornShot
             if (ComboCastStep == 3) then
                 if (Ability.IsCastable(AcornShot, MyMana) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'acorn_shot')) then
-                    if (Ability.GetAutoCastState(AcornShot)) then
-                        if (not (Trees[1] or TempTrees[1]) or not (Ability.IsReady(Bushwhack))) then
-                            Ability.CastPosition(AcornShot, EnemyPosition)
-                        else
+                    if (Ability.GetAutoCastState(AcornShot) and ((not (Trees[1] or TempTrees[1])) or not Ability.IsReady(Bushwhack))) then
+                        Ability.CastPosition(AcornShot, EnemyPosition)
+                    elseif (not Ability.GetAutoCastState(AcornShot)) then
+                        if (not IsSaveToCastItems.InLotus or not IsSaveToCastItems.InMirrorShield) then
                             ComboCastStep = 4
+                        else
+                            Ability.CastTarget(AcornShot, EnemyTarget)
                         end
                     else
-                        if (IsSaveToCastItems.InLotus) then
-                            if (IsSaveToCastItems.InMirrorShield) then
-                                Ability.CastTarget(AcornShot, EnemyTarget)
-                            else
-                                ComboCastStep = 4
-                            end
-                        else
-                            ComboCastStep = 4
-                        end
+                        ComboCastStep = 4
                     end
                 else
                     ComboCastStep = 4
@@ -540,7 +462,10 @@ function Hoodwink.OnUpdate()
             -- Bushwhack
             if (ComboCastStep == 5) then
                 if (Ability.IsCastable(Bushwhack, MyMana) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'bushwhack')) then
-                    if (Trees[1] or TempTrees[1] and (math.max(HeroesCore.GetDisableDuration(EnemyTarget), HeroesCore.GetHexDuration(EnemyTarget)) < (0.35 + ((EnemyPosition - Entity.GetAbsOrigin(MyHero)):Length2D() / 1200)))) then
+                    -- Check if there are trees in the area and the enemy hero is disabled long enough
+                    local IsBushwhackReady = Trees[1] or TempTrees[1] and (math.max(HeroesCore.GetDisableDuration(EnemyTarget), HeroesCore.GetHexDuration(EnemyTarget)) < (0.35 + ((EnemyPosition - Entity.GetAbsOrigin(MyHero)):Length2D() / 1200)))
+
+                    if (IsBushwhackReady) then
                         Ability.CastPosition(Bushwhack, EnemyPosition)
                     else
                         ComboCastStep = 6
@@ -555,14 +480,10 @@ function Hoodwink.OnUpdate()
             -- Sharpshooter
             if (ComboCastStep == 6) then
                 if (Ability.IsCastable(Sharpshooter, MyMana) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'sharpshooter')) then
-                    if (Menu.GetValue(Hoodwink.SharpshooterModeCombo) == 0) then
+                    if (Menu.GetValue(Hoodwink.SharpshooterModeCombo) == 0 or NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_STUNNED) or NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_HEXED) or NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_ROOTED)) then
                         Ability.CastPosition(Sharpshooter, EnemyPosition)
                     else
-                        if (NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_STUNNED) or NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_HEXED) or NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_ROOTED)) then
-                            Ability.CastPosition(Sharpshooter, EnemyPosition)
-                        else
-                            ComboCastStep = 7
-                        end
+                        ComboCastStep = 7
                     end
                 else
                     ComboCastStep = 7
@@ -574,8 +495,10 @@ function Hoodwink.OnUpdate()
                 if (NPC.HasModifier(MyHero, 'modifier_hoodwink_sharpshooter_windup')) then
                     NPC.MoveTo(MyHero, HeroesCore.GetPredictionPos(EnemyTarget, 1), false)
 
+                    local SharpshooterModifier = NPC.GetModifier(MyHero, 'modifier_hoodwink_sharpshooter_windup')
+                    local StackCount = Modifier.GetStackCount(sharpshooterModifier)
                     local MySpellAmplification = NPC.GetModifierProperty(MyHero, Enum.ModifierFunction.MODIFIER_PROPERTY_SPELL_AMPLIFY_PERCENTAGE) + NPC.GetModifierProperty(MyHero, Enum.ModifierFunction.MODIFIER_PROPERTY_SPELL_AMPLIFY_PERCENTAGE_UNIQUE)
-                    local SharpshooterCounterDamage = (SharpshooterDamage * ((Modifier.GetStackCount(NPC.GetModifier(MyHero, 'modifier_hoodwink_sharpshooter_windup'))) / 100))
+                    local SharpshooterCounterDamage = (SharpshooterDamage * (StackCount / 100))
                     local SharpshooterFinalDamage = ((SharpshooterCounterDamage + (SharpshooterCounterDamage * (MySpellAmplification * 0.01))) * NPC.GetMagicalArmorDamageMultiplier(EnemyTarget)) - (((EnemyPosition - Entity.GetAbsOrigin(MyHero)):Length2D() / 2200.0) * NPC.GetHealthRegen(EnemyTarget)) - 25
 
                     if (NPC.HasModifier(EnemyTarget, 'modifier_hoodwink_hunters_mark')) then
@@ -583,12 +506,9 @@ function Hoodwink.OnUpdate()
                     end
 
                     if (Menu.GetValue(Hoodwink.SharpshooterModeRelease) == 0) then
-                        if (Entity.GetHealth(EnemyTarget) < SharpshooterFinalDamage) then
+                        if (Entity.GetHealth(EnemyTarget) < SharpshooterFinalDamage or
+                            Modifier.GetStackCount(SharpshooterModifier) == 100) then
                             Ability.CastNoTarget(SharpshooterRelease)
-                        else
-                            if (Modifier.GetStackCount(NPC.GetModifier(MyHero, 'modifier_hoodwink_sharpshooter_windup')) == 100) then
-                                Ability.CastNoTarget(SharpshooterRelease)
-                            end
                         end
                     else
                         if (Entity.GetHealth(EnemyTarget) < SharpshooterFinalDamage) then
