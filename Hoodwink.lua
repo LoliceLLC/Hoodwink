@@ -180,7 +180,7 @@ local SharpshooterDamage = nil
 -- Combo
 local EnemyTarget = nil
 local BreakerItem = nil
-local ItemsToUse = { { items = Menu.GetItems(Hoodwink.ImportantItemsUsage)}, { items = Menu.GetItems(Hoodwink.SemiImportantItemsUsage)}, { items = Menu.GetItems(Hoodwink.OtherItemsUsage)}, { items = Menu.GetItems(Hoodwink.CloseDistanceItemsUsage)} }
+local ItemsToUse = { { items = Menu.GetItems(Hoodwink.ImportantItemsUsage) }, { items = Menu.GetItems(Hoodwink.SemiImportantItemsUsage) }, { items = Menu.GetItems(Hoodwink.OtherItemsUsage) }, { items = Menu.GetItems(Hoodwink.CloseDistanceItemsUsage) } }
 local IsSaveToCastItems = { InLotus = nil, InMirrorShield = nil }
 
 -- Particle
@@ -248,6 +248,27 @@ function Hoodwink.UpdateParticle()
     end
 end
 
+-- Determines whether it is currently possible to cast a spell or item
+function Hoodwink.IsAvailableToCast(Items, Npc)
+    if not Entity.IsAlive(Npc) or NPC.IsStunned(Npc) then
+        return false
+    end
+
+    if Items and NPC.HasState(Npc, Enum.ModifierState.MODIFIER_STATE_MUTED) then
+        return false
+    end
+
+    if NPC.HasModifier(Npc, 'modifier_obsidian_destroyer_astral_imprisonment_prison') or NPC.HasModifier(Npc, 'modifier_teleporting') or NPC.HasModifier(Npc, 'modifier_axe_berserkers_call') then
+        return false
+    end
+
+    if not Items and (NPC.IsSilenced(Npc) or NPC.HasState(Npc, Enum.ModifierState.MODIFIER_STATE_HEXED) or NPC.HasState(Npc, Enum.ModifierState.MODIFIER_STATE_NIGHTMARED)) then
+        return false
+    end
+
+    return true
+end
+
 function Hoodwink.OnUpdate()
 
     if (Menu.IsEnabled(Hoodwink.MainEnable)) then
@@ -266,37 +287,13 @@ function Hoodwink.OnUpdate()
         -- Updater
         Hoodwink.UpdateInfo()
 
-        -- Return end if my hero stuned etc...
-        -- TODO: rework this shit
-        if not Entity.IsAlive(MyHero)
-            or NPC.HasState(MyHero, Enum.ModifierState.MODIFIER_STATE_SILENCED)
-            or NPC.HasState(MyHero, Enum.ModifierState.MODIFIER_STATE_MUTED)
-            or NPC.HasState(MyHero, Enum.ModifierState.MODIFIER_STATE_STUNNED)
-            or NPC.HasState(MyHero, Enum.ModifierState.MODIFIER_STATE_HEXED)
-            or NPC.HasState(MyHero, Enum.ModifierState.MODIFIER_STATE_NIGHTMARED)
-            or NPC.HasModifier(MyHero, 'modifier_obsidian_destroyer_astral_imprisonment_prison')
-            or NPC.HasModifier(MyHero, 'modifier_teleporting')
-            or NPC.HasModifier(MyHero, 'modifier_pudge_swallow_hide')
-            or NPC.HasModifier(MyHero, 'modifier_axe_berserkers_call')
-        then return end
-
         -- EnemyTarget writer
-        if (HeroesCore.GetTSelectorStyle()) == 1 then
-            if (EnemyTarget == nil) then
-                if (Menu.IsKeyDown(Hoodwink.ComboKey)) then
-                    EnemyTarget = HeroesCore.GetTarget(MyTeam, Enum.TeamType.TEAM_ENEMY)
-                end
-            else
-                if (not Menu.IsKeyDown(Hoodwink.ComboKey)) or (Entity.IsDormant(EnemyTarget)) or (not Entity.IsAlive(EnemyTarget)) then
-                    EnemyTarget = nil
-                end
-            end
-        else
-            if (Menu.IsKeyDown(Hoodwink.ComboKey)) then
+        if not EnemyTarget or not Entity.IsAlive(EnemyTarget) or Entity.IsDormant(EnemyTarget) then
+            if HeroesCore.GetTSelectorStyle() == 1 and (Menu.IsKeyDown(Hoodwink.ComboKey)) or HeroesCore.GetTSelectorStyle() ~= 1 then
                 EnemyTarget = HeroesCore.GetTarget(MyTeam, Enum.TeamType.TEAM_ENEMY)
-            else
-                EnemyTarget = nil
             end
+        elseif HeroesCore.GetTSelectorStyle() == 1 and not Menu.IsKeyDown(Hoodwink.ComboKey) then
+            EnemyTarget = nil
         end
 
         if (not Entity.IsAlive(MyHero)) then
@@ -304,39 +301,31 @@ function Hoodwink.OnUpdate()
         end
 
         -- Move to cursor
-        if (not EnemyTarget) then
-            if (HeroesCore.IsTSelectorMove() and Menu.IsKeyDown(Hoodwink.ComboKey) or Menu.IsKeyDown(Hoodwink.SharpshooterAimKey)) then
-                NPC.MoveTo(MyHero, Input.GetWorldCursorPos())
-            end
+        if not EnemyTarget and (HeroesCore.IsTSelectorMove() and (Menu.IsKeyDown(Hoodwink.ComboKey))) then
+            NPC.MoveTo(MyHero, Input.GetWorldCursorPos())
             return
         end
 
         -- Sharpshooter aim bot
         if (Menu.IsKeyDown(Hoodwink.SharpshooterAimKey)) then
             if (NPC.HasModifier(MyHero, 'modifier_hoodwink_sharpshooter_windup')) then
-
-                NPC.MoveTo(MyHero, HeroesCore.GetPredictionPos(EnemyTarget, 1), false)
-
+                NPC.MoveTo(MyHero, HeroesCore.GetPredictionPos(Input.GetNearestHeroToCursor(MyTeam, Enum.TeamType.TEAM_ENEMY), 0.6), false)
                 if (Modifier.GetStackCount(NPC.GetModifier(MyHero, 'modifier_hoodwink_sharpshooter_windup')) == 100) then
                     Ability.CastNoTarget(SharpshooterRelease)
                 end
             end
         end
 
-        -- funi Linken breaker
-        -- TODO: maybe
-        BreakerItem = nil
-        if (Menu.IsKeyDown(Hoodwink.ComboKey) and Menu.IsEnabled(Hoodwink.LinkenBreakerEnable) and NPC.IsLinkensProtected(EnemyTarget) or (Ability.IsReady(NPC.GetItem(EnemyTarget, 'item_mirror_shield')) and Menu.IsEnabled(Hoodwink.LinkenBreakerMirrorShieldEnable)) and (not Hoodwink.IsTargetedByProjectile(EnemyTarget))) then
-            if (not NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_INVULNERABLE)) then
-                for _, Item in ipairs(Menu.GetItems(Hoodwink.ItemsForLinkenBreaker)) do
-                    if (Menu.IsSelected(Hoodwink.ItemsForLinkenBreaker, Item)) then
-                        if (Ability.IsCastable(NPC.GetItem(MyHero, tostring(Item)), MyMana)) then
-                            BreakerItem = NPC.GetItem(MyHero, tostring(Item))
+        -- LinkenBreaker
+        if Menu.IsKeyDown(Hoodwink.ComboKey) and (Menu.IsEnabled(Hoodwink.LinkenBreakerEnable) or Menu.IsEnabled(Hoodwink.LinkenBreakerMirrorShieldEnable)) and not Hoodwink.IsTargetedByProjectile(EnemyTarget) and not NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_INVULNERABLE) then
+            for _, Item in ipairs(Menu.GetItems(Hoodwink.ItemsForLinkenBreaker)) do
+                if Menu.IsSelected(Hoodwink.ItemsForLinkenBreaker, Item) and Ability.IsCastable(NPC.GetItem(MyHero, Item), MyMana) then
+                    BreakerItem = NPC.GetItem(MyHero, Item)
+                    if NPC.IsLinkensProtected(EnemyTarget) and Menu.IsEnabled(Hoodwink.LinkenBreakerEnable) or NPC.GetItem(EnemyTarget, 'item_mirror_shield') and Menu.IsEnabled(Hoodwink.LinkenBreakerMirrorShieldEnable) then
+                        Ability.CastTarget(BreakerItem, EnemyTarget)
                         break
-                        end
                     end
                 end
-                Ability.CastTarget(BreakerItem, EnemyTarget)
             end
         end
 
@@ -364,22 +353,23 @@ function Hoodwink.OnUpdate()
             local ComboCastStep = 0
 
             -- Items
-            -- i don't know better that or not :/
             if (ComboCastStep == 0) then
                 if not NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_INVULNERABLE) then
                     for _, ItemCategory in ipairs(ItemsToUse) do
                         for _, ItemName in ipairs(ItemCategory.items) do
                             if Ability.IsCastable(NPC.GetItem(MyHero, ItemName), MyMana) then
                                 if Menu.IsSelected(Hoodwink.ImportantItemsUsage, ItemName) or Menu.IsSelected(Hoodwink.SemiImportantItemsUsage, ItemName) or Menu.IsSelected(Hoodwink.OtherItemsUsage, ItemName) or Menu.IsSelected(Hoodwink.CloseDistanceItemsUsage, ItemName) then
-                                    if ItemName == 'item_black_king_bar' or ItemName == 'item_veil_of_discord' or ItemName == 'item_gungir' or ItemName == 'item_heavy_blade' or ItemName == 'item_shivas_guard'
-                                    or ItemName == 'item_manta' or ItemName == 'item_lotus_orb' or ItemName == 'item_blade_mail' or ItemName == 'item_mjollnir' or ItemName == 'item_satanic'
-                                    or ItemName == 'item_mask_of_madness' or ItemName == 'item_boots_of_bearing' or ItemName == 'item_ancient_janggo' or ItemName == 'item_dagger_of_ristul' then
-                                        HeroesCore.ItemsUsage[ItemName](NPC.GetItem(MyHero, ItemName), EnemyTarget)
-                                    elseif ItemName == 'item_fallen_sky' or ItemName == 'item_force_staff' or ItemName == 'item_hurricane_pike' or ItemName == 'item_invis_sword' or ItemName == 'item_silver_edge' then
-                                        HeroesCore.ItemsUsage[ItemName .. '_c'](NPC.GetItem(MyHero, ItemName), EnemyTarget)
-                                    else
-                                        if (IsSaveToCastItems.InMirrorShield) then
+                                    if Hoodwink.IsAvailableToCast(true, MyHero) then
+                                        if ItemName == 'item_black_king_bar' or ItemName == 'item_veil_of_discord' or ItemName == 'item_gungir' or ItemName == 'item_heavy_blade' or ItemName == 'item_shivas_guard'
+                                        or ItemName == 'item_manta' or ItemName == 'item_lotus_orb' or ItemName == 'item_blade_mail' or ItemName == 'item_mjollnir' or ItemName == 'item_satanic'
+                                        or ItemName == 'item_mask_of_madness' or ItemName == 'item_boots_of_bearing' or ItemName == 'item_ancient_janggo' or ItemName == 'item_dagger_of_ristul' then
                                             HeroesCore.ItemsUsage[ItemName](NPC.GetItem(MyHero, ItemName), EnemyTarget)
+                                        elseif ItemName == 'item_fallen_sky' or ItemName == 'item_force_staff' or ItemName == 'item_hurricane_pike' or ItemName == 'item_invis_sword' or ItemName == 'item_silver_edge' then
+                                            HeroesCore.ItemsUsage[ItemName .. '_c'](NPC.GetItem(MyHero, ItemName), EnemyTarget)
+                                        else
+                                            if (IsSaveToCastItems.InMirrorShield) then
+                                                HeroesCore.ItemsUsage[ItemName](NPC.GetItem(MyHero, ItemName), EnemyTarget)
+                                            end
                                         end
                                     end
                                 end
@@ -395,7 +385,7 @@ function Hoodwink.OnUpdate()
 
             -- Decoy
             if (ComboCastStep == 1) then
-                if (Ability.IsCastable(Decoy, MyMana) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'decoy')) then
+                if (Ability.IsCastable(Decoy, MyMana) and Hoodwink.IsAvailableToCast(false, MyHero) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'decoy')) then
                     Ability.CastNoTarget(Decoy)
                 else
                     ComboCastStep = 2
@@ -404,7 +394,7 @@ function Hoodwink.OnUpdate()
 
             -- HuntersBoomerang
             if (ComboCastStep == 2) then
-                if (Ability.IsCastable(HuntersBoomerang, MyMana) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'hunters_boomerang')) then
+                if (Ability.IsCastable(HuntersBoomerang, MyMana) and Hoodwink.IsAvailableToCast(false, MyHero) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'hunters_boomerang')) then
                     local InRangeEnemies = Entity.GetHeroesInRadius(MyHero, HuntersBoomerangRadius, Enum.TeamType.TEAM_ENEMY)
                     for _, Enemy in ipairs(InRangeEnemies) do
                         if (Enemy == EnemyTarget) then
@@ -433,7 +423,7 @@ function Hoodwink.OnUpdate()
 
             -- AcornShot
             if (ComboCastStep == 3) then
-                if (Ability.IsCastable(AcornShot, MyMana) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'acorn_shot')) then
+                if (Ability.IsCastable(AcornShot, MyMana) and Hoodwink.IsAvailableToCast(false, MyHero) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'acorn_shot')) then
                     if (Ability.GetAutoCastState(AcornShot) and ((not (Trees[1] or TempTrees[1])) or not Ability.IsReady(Bushwhack))) then
                         Ability.CastPosition(AcornShot, EnemyPosition)
                     elseif (not Ability.GetAutoCastState(AcornShot)) then
@@ -454,7 +444,7 @@ function Hoodwink.OnUpdate()
 
             -- Scurry
             if (ComboCastStep == 4) then
-                if (Ability.IsCastable(Scurry, MyMana) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'scurry') and (not NPC.HasModifier(MyHero, 'modifier_hoodwink_scurry_active')) and (not NPC.HasModifier(MyHero, 'modifier_hoodwink_sharpshooter_windup'))) then
+                if (Ability.IsCastable(Scurry, MyMana) and Hoodwink.IsAvailableToCast(false, MyHero) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'scurry') and (not NPC.HasModifier(MyHero, 'modifier_hoodwink_scurry_active')) and (not NPC.HasModifier(MyHero, 'modifier_hoodwink_sharpshooter_windup'))) then
                     Ability.CastNoTarget(Scurry)
                 else
                     ComboCastStep = 5
@@ -465,7 +455,7 @@ function Hoodwink.OnUpdate()
 
             -- Bushwhack
             if (ComboCastStep == 5) then
-                if (Ability.IsCastable(Bushwhack, MyMana) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'bushwhack')) then
+                if (Ability.IsCastable(Bushwhack, MyMana) and Hoodwink.IsAvailableToCast(false, MyHero) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'bushwhack')) then
                     -- Check if there are trees in the area and the enemy hero is disabled long enough
                     local IsBushwhackReady = Trees[1] or TempTrees[1] and (math.max(HeroesCore.GetDisableDuration(EnemyTarget), HeroesCore.GetHexDuration(EnemyTarget)) < (0.35 + ((EnemyPosition - Entity.GetAbsOrigin(MyHero)):Length2D() / 1200)))
 
@@ -483,7 +473,7 @@ function Hoodwink.OnUpdate()
 
             -- Sharpshooter
             if (ComboCastStep == 6) then
-                if (Ability.IsCastable(Sharpshooter, MyMana) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'sharpshooter')) then
+                if (Ability.IsCastable(Sharpshooter, MyMana) and Hoodwink.IsAvailableToCast(false, MyHero) and Menu.IsSelected(Hoodwink.AbilitiesForCombo, 'sharpshooter')) then
                     if (Menu.GetValue(Hoodwink.SharpshooterModeCombo) == 0 or NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_STUNNED) or NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_HEXED) or NPC.HasState(EnemyTarget, Enum.ModifierState.MODIFIER_STATE_ROOTED)) then
                         Ability.CastPosition(Sharpshooter, EnemyPosition)
                     else
